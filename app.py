@@ -1,18 +1,20 @@
 import streamlit as st
-import openai
+import os
 import pdfplumber
 import docx
 import pandas as pd
 from difflib import SequenceMatcher
 from openai import OpenAI
-
+from dotenv import load_dotenv
+load_dotenv()
 # ---------------------------
 # CONFIG
 # ---------------------------
 st.set_page_config(page_title="Resume Fixer + Job Matcher", page_icon="🚀")
 
+# Load API key from Streamlit Secrets
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-client = OpenAI(api_key="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")
 # ---------------------------
 # HELPER FUNCTIONS
 # ---------------------------
@@ -53,12 +55,20 @@ def get_ai_resume_feedback(resume_text, target_role="Software Engineer"):
     )
     return response.choices[0].message.content.strip()
 
-
 def match_score(resume, jd):
     return SequenceMatcher(None, resume.lower(), jd.lower()).ratio()
 
 def get_job_matches(resume_text, job_csv="jobs.csv"):
-    jobs = pd.read_csv(job_csv)
+    try:
+        jobs = pd.read_csv(job_csv)
+    except Exception as e:
+        st.error(f"⚠️ Could not load jobs.csv: {e}")
+        return pd.DataFrame(columns=["title", "company", "description", "score"])
+
+    if jobs.empty:
+        st.warning("⚠️ Job list is empty. Please add data to jobs.csv.")
+        return pd.DataFrame(columns=["title", "company", "description", "score"])
+
     jobs["score"] = jobs["description"].apply(lambda x: match_score(resume_text, x))
     top_jobs = jobs.sort_values("score", ascending=False).head(5)
     return top_jobs[["title", "company", "description", "score"]]
@@ -94,6 +104,7 @@ if uploaded_file:
         top_jobs = get_job_matches(resume_text)
 
     st.subheader("💼 Top Job Matches")
+    st.info("Note: This is only for testing purposes, not a real job")
     for _, row in top_jobs.iterrows():
         st.markdown(f"""
         **{row['title']}** at *{row['company']}*  
@@ -102,4 +113,4 @@ if uploaded_file:
         """)
 
     # Download improved resume (future step)
-    st.info("📥 Future: Download improved resume (PDF/DOCX). For now, feedback is shown above.")
+    st.info("📥 Note : Download improved resume (PDF/DOCX) will be provided in future")
